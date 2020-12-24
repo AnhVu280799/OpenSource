@@ -1,144 +1,233 @@
-	 <?php 
-	include 'inc/header.php';
-	// include 'inc/slider.php';
- ?>
-<?php
-    if(isset($_GET['cartid'])){
-        $cartid = $_GET['cartid']; 
-        $delcart = $ct->del_product_cart($cartid);
-    }
-        
-	if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit'])){
-        // LẤY DỮ LIỆU TỪ PHƯƠNG THỨC Ở FORM POST
-        $cartId = $_POST['cartId'];
-        $proId = $_POST['proId'];
-        $quantity = $_POST['quantity'];
-        $update_quantity_Cart = $ct -> update_quantity_Cart($proId,$cartId, $quantity); // hàm check catName khi submit lên
-    	if ($quantity <= 0) {
-    		$delcart = $ct->del_product_cart($cartId);
-    	}
-    } 
- ?>
- <?php
-	if(!isset($_GET['id'])){
-		echo "<meta http-equiv='refresh' content='0;URL=?id=live'>";
-	}
+	<?php
+	$filepath = realpath(dirname(__FILE__));
+	include_once ($filepath.'/../lib/database.php');
+	include_once ($filepath.'/../helpers/format.php');
 ?>
- <div class="main">
-    <div class="content">
-    	<div class="cartoption">		
-			<div class="cartpage">
-			    	<h2>Giỏ hàng của bạn</h2>
-			    	<?php 
-			    	if (isset($update_quantity_Cart)) {
-			    		echo $update_quantity_Cart;
-			    	}
-			    	 ?>
-			    	<?php 
-			    	if (isset($delcart)) {
-			    		echo $delcart;
-			    	}
-			    	 ?>
-			    	 <?php
-			    	 if(isset($delcart)){
-			    	 	echo $delcart;
-			    	 }
-			    	?>
-						<table class="tblone">
-							<tr>
-								<th width="20%">Tên sản phẩm</th>
-								<th width="10%">Hình ảnh</th>
-								<th width="15%">Giá</th>
-								<th width="25%">Số lượng</th>
-								<th width="20%">Tổng giá</th>
-								<th width="10%">Xử lý</th>
-							</tr>
-							<?php 
-							$get_product_cart = $ct->get_product_cart();
-							if($get_product_cart){
-								$subtotal = 0;
-								$qty = 0;
-								while ($result = $get_product_cart->fetch_assoc()) {
-									
-								
-							 ?>
-							<tr>
-								<td><?php echo $result['productName'] ?></td>
-								<td><img src="admin/uploads/<?php echo $result['image'] ?>" alt=""/></td>
-								<td><?php echo $fm->format_currency($result['price'])." VND" ?></td>
-								<td>
-									<form action="" method="post">
-										<input type="hidden" name="cartId" min="0" value="<?php echo $result['cartId'] ?>"/>
-										<input type="hidden" name="proId" min="0" value="<?php echo $result['productId'] ?>"/>
-										<input type="number" name="quantity" min="0" value="<?php echo $result['quantity'] ?>"/>
-										<input type="submit" name="submit" value="Update"/>
-									</form>
-								</td>
-								<td>
-									<?php 
-									$total = $result['price'] * $result['quantity'];
-									echo $fm->format_currency($total)." VND";
-									 ?>
-								</td>
-								<td><a href="?cartid=<?php echo $result['cartId'] ?>">Xóa</a></td>
-							</tr>
-							<?php 
 
-							$subtotal += $total;
-							$qty = $qty + $result['quantity'];
-								}
-							}
-							 ?>
-	
-						</table>
-						<?php
-							$check_cart = $ct->check_cart();
-							if ($check_cart) {
 
-							 ?>
-						<table style="float:right;text-align:left;" width="40%">
-							<tr>
-								<th>Sub Total : </th>
-								<td>
-								<?php echo $fm->format_currency($subtotal)." VND";
-
-									  Session::set('sum',$subtotal);
-									  Session::set('qty',$qty);
-								?>
-								</td>
-							</tr>
-							<tr>
-								<th>VAT : </th>
-								<td>10%</td>
-							</tr>
-							<tr>
-								<th>Grand Total :</th>
-								<td><?php 
-								$vat = $subtotal * 0.1;
-								$grandTotal = $subtotal + $vat;
-								echo $fm->format_currency($grandTotal)." VND";
-								 ?> </td>
-							</tr>
-					   </table>
-					   <?php 
-						}else {
-							echo 'Giỏ của bạn trống trơn ! Hãy mua sắm ngay bây giờ';
-						}
-					    ?>
-					</div>
-					<div class="shopping">
-						<div class="shopleft">
-							<a href="index.php"> <img src="images/shop.png" alt="" /></a>
-						</div>
-						<div class="shopright">
-							<a href="payment.php"> <img src="images/check.png" alt="" /></a>
-						</div>
-					</div>
-    	</div>  	
-       <div class="clear"></div>
-    </div>
- </div>
-
+ 
 <?php 
-	include 'inc/footer.php';
+	/**
+	* 
+	*/
+	class cart
+	{
+		private $db;
+		private $fm;
+		public function __construct()
+		{
+			$this->db = new Database();
+			$this->fm = new Format();
+		}
+		public function add_to_cart($id, $quantity)
+		{
+			$quantity = $this->fm->validation($quantity);
+			$quantity = mysqli_real_escape_string($this->db->link, $quantity);
+			$id = mysqli_real_escape_string($this->db->link, $id);
+			$sId = session_id();
+
+			$query = "SELECT * FROM tbl_product WHERE productId = '$id' ";
+			$result = $this->db->select($query)->fetch_assoc();
+
+			$productName = $result['productName'];
+			$price = $result['price'];
+			$image = $result['image'];
+			if($result['product_remain']>$quantity){
+			
+				$query_insert = "INSERT INTO tbl_cart(productId,productName,quantity,sId,price,image) VALUES('$id','$productName','$quantity','$sId','$price','$image' ) ";
+				$insert_cart = $this->db->insert($query_insert);
+				if($result){
+					header('Location:cart.php');
+				}else {
+					header('Location:404.php');
+				}
+			}else{
+				$msg = "<span class='erorr'> Số lượng ".$quantity." bạn đặt quá số lượng chúng tôi chỉ còn ".$result['product_remain']." cái</span> ";
+				return $msg;
+			}
+			
+
+		}
+		public function get_product_cart()
+		{
+			$sId = session_id();
+			$query = "SELECT * FROM tbl_cart WHERE sId = '$sId' ";
+			$result = $this->db->select($query);
+			return $result;
+		}
+		public function update_quantity_Cart($proId,$cartId, $quantity)
+		{
+			$quantity = mysqli_real_escape_string($this->db->link, $quantity);
+			$cartId = mysqli_real_escape_string($this->db->link, $cartId);
+			$proId = mysqli_real_escape_string($this->db->link, $proId);
+
+			$query_product = "SELECT * FROM tbl_product WHERE productId = '$proId' ";
+			$result_product = $this->db->select($query_product)->fetch_assoc();
+			if($quantity<$result_product['product_remain']){
+				$query = "UPDATE tbl_cart SET
+
+				quantity = '$quantity'
+
+				WHERE cartId = '$cartId'";
+
+				$result = $this->db->update($query);
+				if ($result) {
+					header('Location:cart.php');
+				}else {
+					$msg = "<span class='erorr'> Product Quantity Update NOT Succesfully</span> ";
+					return $msg;
+				}
+			}else{
+				$msg = "<span class='erorr'> Số lượng ".$quantity." bạn đặt quá số lượng chúng tôi chỉ còn ".$result_product['product_remain']." cái</span> ";
+				return $msg;
+			}
+
+		}
+		public function del_product_cart($cartid){
+			$cartid = mysqli_real_escape_string($this->db->link, $cartid);
+			$query = "DELETE FROM tbl_cart WHERE cartId = '$cartid'";
+			$result = $this->db->delete($query);
+			if($result){
+				header('Location:cart.php');
+			}else{
+				$msg = "<span class='error'>Sản phẩm đã được xóa</span>";
+				return $msg;
+			}
+		}
+
+		public function check_cart()
+		{
+			$sId = session_id();
+			$query = "SELECT * FROM tbl_cart WHERE sId = '$sId' ";
+			$result = $this->db->select($query);
+			return $result;
+		}
+		public function check_order($customer_id)
+		{
+			$sId = session_id();
+			$query = "SELECT * FROM tbl_order WHERE customer_id = '$customer_id' ";
+			$result = $this->db->select($query);
+			return $result;
+		}
+		public function del_all_data_cart()
+		{
+			$sId = session_id();
+			$query = "DELETE FROM tbl_cart WHERE sId = '$sId' ";
+			$result = $this->db->select($query);
+			return $result;
+		}
+		public function del_compare($customer_id){
+			$sId = session_id();
+			$query = "DELETE FROM tbl_compare WHERE customer_id = '$customer_id'";
+			$result = $this->db->delete($query);
+			return $result;
+		}
+		public function insertOrder($customer_id)
+		{
+			$sId = session_id();
+			$query = "SELECT * FROM tbl_cart WHERE sId = '$sId'";
+			$get_product = $this->db->select($query);
+			if($get_product){
+				while($result = $get_product->fetch_assoc()){
+					$productid = $result['productId'];
+					$productName = $result['productName'];
+					$quantity = $result['quantity'];
+					$price = $result['price'] * $quantity;
+					$image = $result['image'];
+					$customer_id = $customer_id;
+					$query_order = "INSERT INTO tbl_order(productId,productName,quantity,price,image,customer_id) VALUES('$productid','$productName','$quantity','$price','$image','$customer_id')";
+					$insert_order = $this->db->insert($query_order);
+				}
+			}
+		}
+		public function getAmountPrice($customer_id)
+		{
+			$query = "SELECT price FROM tbl_order WHERE customer_id = '$customer_id' ";
+			$get_price = $this->db->select($query);
+			return $get_price;
+		}
+		public function get_cart_ordered($customer_id)
+		{
+			$query = "SELECT * FROM tbl_order WHERE customer_id = '$customer_id' ";
+			$get_cart_ordered = $this->db->select($query);
+			return $get_cart_ordered;
+		}
+		public function get_inbox_cart()
+		{
+			$query = "SELECT * FROM tbl_order ";
+			$get_inbox_cart = $this->db->select($query);
+			return $get_inbox_cart;
+		}
+		
+		public function shifted($id,$proid,$qty,$time,$price)
+		{
+			$id = mysqli_real_escape_string($this->db->link, $id);
+			$proid = mysqli_real_escape_string($this->db->link, $proid);
+			$qty = mysqli_real_escape_string($this->db->link, $qty);
+			$time = mysqli_real_escape_string($this->db->link, $time);
+			$price = mysqli_real_escape_string($this->db->link, $price);
+
+			$query_select = "SELECT * FROM tbl_product WHERE productId='$proid'";
+			$get_select = $this->db->select($query_select);
+
+			if($get_select){
+				while($result = $get_select->fetch_assoc()){
+					$soluong_new = $result['product_remain'] - $qty;
+					$qty_soldout = $result['product_soldout'] + $qty;
+
+					$query_soluong = "UPDATE tbl_product SET
+
+					product_remain = '$soluong_new',product_soldout = '$qty_soldout' WHERE productId = '$proid'";
+					$result = $this->db->update($query_soluong);
+				}
+			}
+
+			$query = "UPDATE tbl_order SET
+
+			status = '1'
+
+			WHERE id = '$id' AND date_order = '$time' AND price = '$price' ";
+
+
+			$result = $this->db->update($query);
+			if ($result) {
+				$msg = "<span class='success'> Update Order Succesfully</span> ";
+				return $msg;
+			}else {
+				$msg = "<span class='erorr'> Update Order NOT Succesfully</span> ";
+				return $msg;
+			}
+		}
+		public function del_shifted($id,$time,$price)
+		{
+			$id = mysqli_real_escape_string($this->db->link, $id);
+			$time = mysqli_real_escape_string($this->db->link, $time);
+			$price = mysqli_real_escape_string($this->db->link, $price);
+			$query = "DELETE FROM tbl_order 
+					  WHERE id = '$id' AND date_order = '$time' AND price = '$price' ";
+
+			$result = $this->db->update($query);
+			if ($result) {
+				$msg = "<span class='success'> DELETE Order Succesfully</span> ";
+				return $msg;
+			}else {
+				$msg = "<span class='erorr'> DELETE Order NOT Succesfully</span> ";
+				return $msg;
+			}
+		}
+		public function shifted_confirm($id,$time,$price)
+		{
+			$id = mysqli_real_escape_string($this->db->link, $id);
+			$time = mysqli_real_escape_string($this->db->link, $time);
+			$price = mysqli_real_escape_string($this->db->link, $price);
+			$query = "UPDATE tbl_order SET
+
+			status = '2'
+
+			WHERE customer_id = '$id' AND date_order = '$time' AND price = '$price' ";
+
+			$result = $this->db->update($query);
+			return $result;
+		}
+	}
  ?>
